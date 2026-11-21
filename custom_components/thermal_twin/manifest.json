@@ -1,0 +1,9 @@
+{
+  "domain": "thermal_twin",
+  "name": "Thermal Twin",
+  "codeowners": ["@yourgithubusername"],
+  "config_flow": false,
+  "documentation": "https://github.com",
+  "iot_class": "calculated",
+  "version": "1.0.0"
+}
