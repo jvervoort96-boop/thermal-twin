@@ -29,12 +29,12 @@ DEFAULT_GAS_M3_PER_MIN = 0.015          # Average gas consumption while firing (
 DEFAULT_GAS_START_M3 = 0.010            # Extra gas consumption per burner start (m³)
 DEFAULT_GAS_KWH_PER_M3 = 9.77           # 9.77 kWh/m³ (GCV / bovenwaarde) or 8.8 (NCV / onderwaarde)
 
-# Rooms / radiators (add remaining rooms here)
+# Alle 7 ruimtes met exacte nominale vermogens (incl. leidingen) en exponenten
 DEFAULT_RADIATORS = [
     {
         "id": "woonkamer",
         "name": "Woonkamer",
-        "q_nom_kw": 5.178,  # Achter (2.061) + Voor (2.717) + Leiding 10m (0.4)
+        "q_nom_kw": 5.178,  # Achter (2.061) + Voor (2.717) + Leiding 10m (0.400)
         "room_sensor": "sensor.opentherm_gateway_otgw_otgw_room_temperature",
         "exponent": 1.29,
         "bubble_factor": 0.16,
@@ -42,9 +42,49 @@ DEFAULT_RADIATORS = [
     {
         "id": "gang",
         "name": "Gang",
-        "q_nom_kw": 1.200,  # Adjust to your exact nominal output
-        "room_sensor": "sensor.atc_4148_temperature",  # Adjust to matching sensor
-        "exponent": 1.30,
+        "q_nom_kw": 1.797,  # Radiator (1.749) + Leiding 1.2m (0.048)
+        "room_sensor": "sensor.atc_4148_temperature",
+        "exponent": 1.29,
         "bubble_factor": 0.05,
+    },
+    {
+        "id": "babykamer",
+        "name": "Babykamer",
+        "q_nom_kw": 1.070,  # Radiator (0.830) + Leiding 6m (0.240)
+        "room_sensor": "sensor.atc_721a_temperature",
+        "exponent": 1.26,
+        "bubble_factor": 0.22,
+    },
+    {
+        "id": "slaapkamer",
+        "name": "Slaapkamer",
+        "q_nom_kw": 1.257,  # Radiator (1.245) + Leiding 0.3m (0.012)
+        "room_sensor": "sensor.atc_6886_temperature",
+        "exponent": 1.26,
+        "bubble_factor": 0.22,
+    },
+    {
+        "id": "kantoor",
+        "name": "Kantoor",
+        "q_nom_kw": 1.900,  # Radiator (1.660) + Leiding 6m (0.240)
+        "room_sensor": "sensor.atc_69ba_temperature",
+        "exponent": 1.26,
+        "bubble_factor": 0.22,
+    },
+    {
+        "id": "badkamer",
+        "name": "Badkamer",
+        "q_nom_kw": 0.816,  # Radiator (0.800) + Leiding 0.4m (0.016)
+        "room_sensor": "sensor.atc_7954_temperature",
+        "exponent": 1.24,
+        "bubble_factor": 0.32,
+    },
+    {
+        "id": "voorzolder",
+        "name": "Voorzolder",
+        "q_nom_kw": 0.365,  # Leiding 2m ongeïsoleerd (0.080) + 26m geïsoleerd (0.195) + Ketel (0.090)
+        "room_sensor": "sensor.atc_a8e9_temperature",
+        "exponent": 1.08,
+        "bubble_factor": 0.00,
     },
 ]
