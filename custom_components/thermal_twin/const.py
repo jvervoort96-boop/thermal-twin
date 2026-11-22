@@ -18,7 +18,7 @@ DEFAULT_ALL_ROOM_SENSORS = [
 DEFAULT_TARGET_RETOUR = 29.0
 DEFAULT_K_WARM = 0.007
 DEFAULT_K_KOEL = 0.005
-DEFAULT_K_RAD = 0.018
+DEFAULT_K_RAD = 0.007
 
 DEFAULT_AANVOER_OFFSET = 10.0           # °C above return during active heating
 DEFAULT_RAMP_SECONDS = 60.0             # Dead time / ramp duration on start & stop (s)
