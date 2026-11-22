@@ -18,15 +18,15 @@ DEFAULT_ALL_ROOM_SENSORS = [
 DEFAULT_TARGET_RETOUR = 29.0
 DEFAULT_K_WARM = 0.007
 DEFAULT_K_KOEL = 0.005
-DEFAULT_K_RAD = 0.035
+DEFAULT_K_RAD = 0.018
 
 DEFAULT_AANVOER_OFFSET = 10.0           # °C above return during active heating
 DEFAULT_RAMP_SECONDS = 60.0             # Dead time / ramp duration on start & stop (s)
 DEFAULT_COOLDOWN_ROOM_SECONDS = 3600.0  # Threshold before cooling toward t_min_room (s)
 
 # Gas consumption and energy constants
-DEFAULT_GAS_M3_PER_MIN = 0.015          # Average gas consumption while firing (m³/min)
-DEFAULT_GAS_START_M3 = 0.010            # Extra gas consumption per burner start (m³)
+DEFAULT_GAS_M3_PER_MIN = 0.0165         # Average gas consumption while firing (m³/min)
+DEFAULT_GAS_START_M3 = 0.00833            # Extra gas consumption per burner start (m³)
 DEFAULT_GAS_KWH_PER_M3 = 9.77           # 9.77 kWh/m³ (GCV / bovenwaarde) or 8.8 (NCV / onderwaarde)
 
 # Alle 7 ruimtes met exacte nominale vermogens (incl. leidingen) en exponenten
