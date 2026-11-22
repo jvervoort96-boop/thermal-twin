@@ -58,10 +58,10 @@ class ThermalTwinModel:
         self.t_aanvoer_virt: float | None = None
         self.t_rad_offset: float = 0.0
         self.t_rad_virt: float | None = None
+        self._prev_t_rad_virt: float | None = None
         self._initialized: bool = False
         self._prev_ch_actief: bool = False
 
-        self._prev_buffer_kwh: float = 0.0
         self.instant_efficiency_pct: float = 0.0
         self.boiler_output_kw: float = 0.0
         self.gas_input_kw: float = 0.0
@@ -82,7 +82,7 @@ class ThermalTwinModel:
         self._listeners.append(cb)
 
     def sync_buffer_baseline(self) -> None:
-        self._prev_buffer_kwh = self.get_buffer_heat_kwh()
+        self._prev_t_rad_virt = self.t_rad_virt
 
     def _get_float(self, entity_id: str, default: float = 20.0) -> float:
         state = self.hass.states.get(entity_id)
@@ -99,6 +99,14 @@ class ThermalTwinModel:
         for cb in self._listeners:
             cb()
 
+    def get_system_capacitance(self) -> float:
+        """Constante thermische capaciteit C_systeem (kWh/°C)."""
+        if self.k_koel <= 0:
+            return 0.0
+        som_q_nom = sum(r.get("q_nom_kw", 0.0) for r in self.radiators)
+        ticks_per_hour = 3600.0 / TICK_SECONDS
+        return som_q_nom / (50.0 * self.k_koel * ticks_per_hour)
+
     def recalculate(self) -> None:
         t_room = self._get_float(self.main_room_sensor, 20.0)
         ch_state = self.hass.states.get(self.ch_entity)
@@ -110,10 +118,12 @@ class ThermalTwinModel:
             self.t_aanvoer_virt = t_room
         if self.t_rad_virt is None:
             self.t_rad_virt = t_room
+        if self._prev_t_rad_virt is None:
+            self._prev_t_rad_virt = self.t_rad_virt
 
         if not self._initialized:
             self._prev_ch_actief = ch_actief
-            self._prev_buffer_kwh = self.get_buffer_heat_kwh()
+            self._prev_t_rad_virt = self.t_rad_virt
             self._initialized = True
 
         if ch_actief and not self._prev_ch_actief:
@@ -135,6 +145,7 @@ class ThermalTwinModel:
         effective_target = self.target_retour + bubble_retour_shift
         ramp = self.ramp_seconds
 
+        # 1. VIRTUELE RETOURTEMPERATUUR
         curr = self.t_retour_virt
         if ch_actief and t_sinds_wissel <= ramp:
             self.t_retour_virt = curr - (curr - t_room) * self.k_koel
@@ -147,6 +158,7 @@ class ThermalTwinModel:
         else:
             self.t_retour_virt = curr - (curr - t_min_room) * self.k_koel
 
+        # 2. VIRTUELE AANVOERTEMPERATUUR
         if ch_actief and t_sinds_wissel <= ramp:
             offset_aanvoer = self.aanvoer_offset * (t_sinds_wissel / ramp)
             self.t_aanvoer_virt = self.t_retour_virt + offset_aanvoer
@@ -158,14 +170,15 @@ class ThermalTwinModel:
         else:
             self.t_aanvoer_virt = self.t_retour_virt
 
+        # 3. VIRTUELE RADIATORTEMPERATUUR
         offset_doel = (self.t_aanvoer_virt - self.t_retour_virt) / 2.0
         self.t_rad_offset = self.t_rad_offset + (offset_doel - self.t_rad_offset) * self.k_rad
         self.t_rad_virt = self.t_retour_virt + self.t_rad_offset
 
+        # 4. BUFFER HEAT, POWER, GAS & EFFICIENCY
         hours_per_tick = TICK_SECONDS / 3600.0
         ticks_per_hour = 3600.0 / TICK_SECONDS
         p_rad_kw = self.get_total_power_kw()
-        current_buffer_kwh = self.get_buffer_heat_kwh()
 
         self.total_heat_output_kwh += p_rad_kw * hours_per_tick
 
@@ -175,7 +188,9 @@ class ThermalTwinModel:
             self.total_gas_input_kwh += gas_m3_tick * self.gas_kwh_per_m3
 
             p_gas_kw = self.gas_m3_per_min * 60.0 * self.gas_kwh_per_m3
-            p_buffer_kw = (current_buffer_kwh - self._prev_buffer_kwh) * ticks_per_hour
+            c_systeem = self.get_system_capacitance()
+            dt_rad = self.t_rad_virt - self._prev_t_rad_virt
+            p_buffer_kw = c_systeem * dt_rad * ticks_per_hour
             p_boiler_kw = max(0.0, p_rad_kw + p_buffer_kw)
 
             self.gas_input_kw = round(p_gas_kw, 3)
@@ -188,7 +203,7 @@ class ThermalTwinModel:
             self.gas_input_kw = 0.0
             self.boiler_output_kw = 0.0
 
-        self._prev_buffer_kwh = current_buffer_kwh
+        self._prev_t_rad_virt = self.t_rad_virt
 
     def get_weighted_bubble_factor(self) -> float:
         som_gewogen = 0.0
@@ -223,13 +238,9 @@ class ThermalTwinModel:
             return 0.0
         t_room = self._get_float(self.main_room_sensor, 20.0)
         dt_systeem = self.t_rad_virt - t_room
-        if dt_systeem <= 0.0 or self.k_koel <= 0:
+        if dt_systeem <= 0.0:
             return 0.0
-
-        som_q_nom = sum(r.get("q_nom_kw", 0.0) for r in self.radiators)
-        ticks_per_hour = 3600.0 / TICK_SECONDS
-        c_systeem = som_q_nom / (50.0 * self.k_koel * ticks_per_hour)
-        return round(c_systeem * dt_systeem, 4)
+        return round(self.get_system_capacitance() * dt_systeem, 4)
 
     def get_system_efficiency_pct(self) -> float:
         if self.total_gas_input_kwh <= 0.01:
