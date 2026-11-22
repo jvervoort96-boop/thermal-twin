@@ -171,9 +171,9 @@ class ThermalTwinModel:
             self.t_aanvoer_virt = self.t_retour_virt
 
         # 3. VIRTUELE RADIATORTEMPERATUUR
-        offset_doel = (self.t_aanvoer_virt - self.t_retour_virt) / 2.0
-        self.t_rad_offset = self.t_rad_offset + (offset_doel - self.t_rad_offset) * self.k_rad
-        self.t_rad_virt = self.t_retour_virt + self.t_rad_offset
+        t_rad_doel = (self.t_aanvoer_virt + self.t_retour_virt) / 2.0
+        self.t_rad_virt += (t_rad_doel - self.t_rad_virt) * self.k_rad
+        self.t_rad_offset = self.t_rad_virt - self.t_retour_virt
 
         # 4. BUFFER HEAT, POWER, GAS & EFFICIENCY
         hours_per_tick = TICK_SECONDS / 3600.0
