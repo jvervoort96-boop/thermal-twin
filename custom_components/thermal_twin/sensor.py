@@ -18,6 +18,8 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         VirtueleRadSensor(model),
         GewogenWarmtebelSensor(model),
         TotaalVermogenSensor(model),
+        KetelVermogenSensor(model),
+        GasVermogenSensor(model),
         BufferWarmteSensor(model),
         CumulatieveWarmteSensor(model),
         CumulatiefGasKwhSensor(model),
@@ -64,40 +66,58 @@ class BaseRestoreModelSensor(RestoreSensor):
         self.model.register_listener(self.async_write_ha_state)
 
 
-class VirtueleRetourSensor(BaseModelSensor):
+class VirtueleRetourSensor(BaseRestoreModelSensor):
     _attr_name = "Virtuele Retourtemperatuur"
     _attr_unique_id = "thermal_twin_virtuele_retourtemperatuur"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_state_class = SensorStateClass.MEASUREMENT
 
+    def __init__(self, model):
+        super().__init__(model, "t_retour_virt")
+
     @property
     def native_value(self):
-        return round(self.model.t_retour_virt, 3)
+        return round(self.model.t_retour_virt, 3) if self.model.t_retour_virt is not None else None
 
 
-class VirtueleAanvoerSensor(BaseModelSensor):
+class VirtueleAanvoerSensor(BaseRestoreModelSensor):
     _attr_name = "Virtuele Aanvoertemperatuur"
     _attr_unique_id = "thermal_twin_virtuele_aanvoertemperatuur"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_state_class = SensorStateClass.MEASUREMENT
 
+    def __init__(self, model):
+        super().__init__(model, "t_aanvoer_virt")
+
     @property
     def native_value(self):
-        return round(self.model.t_aanvoer_virt, 3)
+        return round(self.model.t_aanvoer_virt, 3) if self.model.t_aanvoer_virt is not None else None
 
 
-class VirtueleRadSensor(BaseModelSensor):
+class VirtueleRadSensor(BaseRestoreModelSensor):
     _attr_name = "Virtuele Radiatortemperatuur"
     _attr_unique_id = "thermal_twin_virtuele_radiator_temperatuur"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_state_class = SensorStateClass.MEASUREMENT
 
+    def __init__(self, model):
+        super().__init__(model, "t_rad_virt")
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) and "offset" in last_state.attributes:
+            try:
+                self.model.t_rad_offset = float(last_state.attributes["offset"])
+            except ValueError:
+                pass
+        self.model.sync_buffer_baseline()
+
     @property
     def native_value(self):
-        return round(self.model.t_rad_virt, 3)
+        return round(self.model.t_rad_virt, 3) if self.model.t_rad_virt is not None else None
 
     @property
     def extra_state_attributes(self):
@@ -124,6 +144,30 @@ class TotaalVermogenSensor(BaseModelSensor):
     @property
     def native_value(self):
         return self.model.get_total_power_kw()
+
+
+class KetelVermogenSensor(BaseModelSensor):
+    _attr_name = "CV Geleverd Ketelvermogen"
+    _attr_unique_id = "thermal_twin_cv_geleverd_ketelvermogen"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self):
+        return self.model.boiler_output_kw
+
+
+class GasVermogenSensor(BaseModelSensor):
+    _attr_name = "CV Gas Input Vermogen"
+    _attr_unique_id = "thermal_twin_cv_gas_input_vermogen"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self):
+        return self.model.gas_input_kw
 
 
 class KamerVermogenSensor(BaseModelSensor):
