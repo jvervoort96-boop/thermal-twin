@@ -58,13 +58,14 @@ class ThermalTwinModel:
         self.t_aanvoer_virt: float | None = None
         self.t_rad_offset: float = 0.0
         self.t_rad_virt: float | None = None
-        self._prev_t_rad_virt: float | None = None
         self._initialized: bool = False
         self._prev_ch_actief: bool = False
 
-        self.instant_efficiency_pct: float = 0.0
-        self.boiler_output_kw: float = 0.0
-        self.gas_input_kw: float = 0.0
+        self.cycle_efficiency_pct: float | None = None
+        self._cycle_active: bool = False
+        self._cycle_start_t_rad: float | None = None
+        self._cycle_heat_output_kwh: float = 0.0
+        self._cycle_gas_input_kwh: float = 0.0
 
         self.total_heat_output_kwh: float = 0.0
         self.total_gas_input_kwh: float = 0.0
@@ -80,9 +81,6 @@ class ThermalTwinModel:
 
     def register_listener(self, cb) -> None:
         self._listeners.append(cb)
-
-    def sync_buffer_baseline(self) -> None:
-        self._prev_t_rad_virt = self.t_rad_virt
 
     def _get_float(self, entity_id: str, default: float = 20.0) -> float:
         state = self.hass.states.get(entity_id)
@@ -118,18 +116,33 @@ class ThermalTwinModel:
             self.t_aanvoer_virt = t_room
         if self.t_rad_virt is None:
             self.t_rad_virt = t_room
-        if self._prev_t_rad_virt is None:
-            self._prev_t_rad_virt = self.t_rad_virt
 
         if not self._initialized:
             self._prev_ch_actief = ch_actief
-            self._prev_t_rad_virt = self.t_rad_virt
             self._initialized = True
 
         if ch_actief and not self._prev_ch_actief:
             self.ch_starts += 1
             self.total_gas_m3 += self.gas_start_m3
             self.total_gas_input_kwh += self.gas_start_m3 * self.gas_kwh_per_m3
+            # Finish the previous start-to-start interval before counting this tick.
+            if (
+                self._cycle_active
+                and self._cycle_start_t_rad is not None
+                and self._cycle_gas_input_kwh > 0.0
+            ):
+                buffer_delta_kwh = self.get_system_capacitance() * (
+                    self.t_rad_virt - self._cycle_start_t_rad
+                )
+                cycle_heat_kwh = self._cycle_heat_output_kwh + buffer_delta_kwh
+                self.cycle_efficiency_pct = round(
+                    cycle_heat_kwh / self._cycle_gas_input_kwh * 100.0, 1
+                )
+
+            self._cycle_active = True
+            self._cycle_start_t_rad = self.t_rad_virt
+            self._cycle_heat_output_kwh = 0.0
+            self._cycle_gas_input_kwh = self.gas_start_m3 * self.gas_kwh_per_m3
         self._prev_ch_actief = ch_actief
 
         kamer_temps = [self._get_float(s, t_room) for s in self.all_room_sensors]
@@ -177,33 +190,18 @@ class ThermalTwinModel:
 
         # 4. BUFFER HEAT, POWER, GAS & EFFICIENCY
         hours_per_tick = TICK_SECONDS / 3600.0
-        ticks_per_hour = 3600.0 / TICK_SECONDS
         p_rad_kw = self.get_total_power_kw()
 
         self.total_heat_output_kwh += p_rad_kw * hours_per_tick
+        if self._cycle_active:
+            self._cycle_heat_output_kwh += p_rad_kw * hours_per_tick
 
         if ch_actief:
             gas_m3_tick = self.gas_m3_per_min * (TICK_SECONDS / 60.0)
             self.total_gas_m3 += gas_m3_tick
             self.total_gas_input_kwh += gas_m3_tick * self.gas_kwh_per_m3
-
-            p_gas_kw = self.gas_m3_per_min * 60.0 * self.gas_kwh_per_m3
-            c_systeem = self.get_system_capacitance()
-            dt_rad = self.t_rad_virt - self._prev_t_rad_virt
-            p_buffer_kw = c_systeem * dt_rad * ticks_per_hour
-            p_boiler_kw = max(0.0, p_rad_kw + p_buffer_kw)
-
-            self.gas_input_kw = round(p_gas_kw, 3)
-            self.boiler_output_kw = round(p_boiler_kw, 3)
-
-            if p_gas_kw > 0:
-                eff = (p_boiler_kw / p_gas_kw) * 100.0
-                self.instant_efficiency_pct = round(max(0.0, eff), 1)
-        else:
-            self.gas_input_kw = 0.0
-            self.boiler_output_kw = 0.0
-
-        self._prev_t_rad_virt = self.t_rad_virt
+            if self._cycle_active:
+                self._cycle_gas_input_kwh += gas_m3_tick * self.gas_kwh_per_m3
 
     def get_weighted_bubble_factor(self) -> float:
         som_gewogen = 0.0

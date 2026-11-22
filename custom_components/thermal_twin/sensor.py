@@ -18,14 +18,12 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         VirtueleRadSensor(model),
         GewogenWarmtebelSensor(model),
         TotaalVermogenSensor(model),
-        KetelVermogenSensor(model),
-        GasVermogenSensor(model),
         BufferWarmteSensor(model),
         CumulatieveWarmteSensor(model),
         CumulatiefGasKwhSensor(model),
         CumulatiefGasM3Sensor(model),
         SysteemRendementSensor(model),
-        ActueelStookrendementSensor(model),
+        CyclusRendementSensor(model),
     ]
     for rad in model.radiators:
         entities.append(KamerVermogenSensor(model, rad))
@@ -106,15 +104,6 @@ class VirtueleRadSensor(BaseRestoreModelSensor):
     def __init__(self, model):
         super().__init__(model, "t_rad_virt")
 
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        if (last_state := await self.async_get_last_state()) and "offset" in last_state.attributes:
-            try:
-                self.model.t_rad_offset = float(last_state.attributes["offset"])
-            except ValueError:
-                pass
-        self.model.sync_buffer_baseline()
-
     @property
     def native_value(self):
         return round(self.model.t_rad_virt, 3) if self.model.t_rad_virt is not None else None
@@ -144,30 +133,6 @@ class TotaalVermogenSensor(BaseModelSensor):
     @property
     def native_value(self):
         return self.model.get_total_power_kw()
-
-
-class KetelVermogenSensor(BaseModelSensor):
-    _attr_name = "CV Geleverd Ketelvermogen"
-    _attr_unique_id = "thermal_twin_cv_geleverd_ketelvermogen"
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    @property
-    def native_value(self):
-        return self.model.boiler_output_kw
-
-
-class GasVermogenSensor(BaseModelSensor):
-    _attr_name = "CV Gas Input Vermogen"
-    _attr_unique_id = "thermal_twin_cv_gas_input_vermogen"
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    @property
-    def native_value(self):
-        return self.model.gas_input_kw
 
 
 class KamerVermogenSensor(BaseModelSensor):
@@ -258,15 +223,16 @@ class SysteemRendementSensor(BaseModelSensor):
         return self.model.get_system_efficiency_pct()
 
 
-class ActueelStookrendementSensor(BaseRestoreModelSensor):
-    _attr_name = "CV Actueel Stookrendement"
-    _attr_unique_id = "thermal_twin_cv_actueel_stookrendement"
+class CyclusRendementSensor(BaseRestoreModelSensor):
+    _attr_name = "CV Rendement per Stookcyclus"
+    _attr_unique_id = "thermal_twin_cv_cyclusrendement"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, model):
-        super().__init__(model, "instant_efficiency_pct")
+        super().__init__(model, "cycle_efficiency_pct")
 
     @property
     def native_value(self):
-        return self.model.instant_efficiency_pct
+        efficiency = self.model.cycle_efficiency_pct
+        return round(efficiency, 1) if efficiency is not None else None
